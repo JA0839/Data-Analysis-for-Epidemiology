@@ -1,0 +1,703 @@
+/*************************************************************************
+ *	Course: Data Analysis - EPID 5314						 *
+ *	Assignment: Homework 8								 *
+ *	Due Date: 10/27/2021								 *
+ *	Programmer(s): Jessie Ausman							 *
+ *	Program Name: HW8									 *
+ *	Save Program/Log/Output: C:\Users\jessa\Desktop\EPID 5314\Homework8*
+ *	Save Data Files: C:\Users\jessa\Desktop\EPID 5314\PNC Data File\PNC* 
+ *	Datasets										 *
+**************************************************************************/
+
+
+
+
+/***************************	PART 1	*******************************/
+
+
+*****************************************************************************************
+*	Merge 6th and 12th grade waves, create separate case/control sets & use macro		*
+*	fxn to match 4:1. Use macro for matching											*
+****************************************************************************;
+
+
+
+*read in data and create case/control datasets;
+libname class "C:\Users\jessa\Desktop\EPID 5314\PNC Data File\PNC Datasets";
+
+data HW8;
+	merge class.pnc02 (in=a) class.pnc09 (in=b) class.pnc_demographics (in=c);
+	by id;
+	if a;
+	if b;
+	aggression = beat1 + pushed1 + kicked1;
+	if missing(beat1) or missing(pushed1) or missing(kicked1) then aggression = .;
+run;
+
+
+proc freq data=HW8;
+	table aggression;
+run;
+
+data case;
+	set HW8;
+ 	if sproc5 = 3;
+run;
+
+data case1;
+	set case;
+	if missing(aggression) then delete;
+run;
+
+data control;
+ 	set HW8;
+	if sproc5 = 1;
+run;
+
+data control1;
+	set control;
+	if missing(aggression) then delete;
+run;
+
+/***** impute gender vars from future waves for those missing gender1*****/
+data missing_gender;
+	set case1;
+	if missing(gender1);
+run;
+
+proc freq data=missing_gender;
+	tables id*gender1 / missing;
+run;
+*missing gender1 ids for cases:
+	103825;
+
+data missing_gender1;
+	set control1;
+	if missing(gender1);
+run;
+
+proc freq data=missing_gender1;
+	tables id*gender1 / missing;
+run;
+*missing gender1 ids for controls:
+	101000
+	101391
+	103716
+	104492;
+
+
+
+proc print data=class.pnc03;
+VAR  ID GENDER2;
+WHERE ID=103825 or ID=101000 OR ID=101391 OR ID=103716 OR ID=104492;
+RUN;
+
+
+proc print data=class.pnc_demographics;
+	var id gender;
+	where id=104492;
+run;
+
+data control2;
+	set control1;
+	if id = 101000 or id = 101391 or id = 103716 or id = 104492 then gender1 = 1;
+	if id = 104492 then delete;
+run;
+
+data case2;
+	set case1;
+	if id = 103825 then gender1 = 1;
+run;
+
+proc freq data=case2;
+	tables gender1*id;
+	where id = 103825;
+run;
+
+proc freq data=control2;
+	tables gender1*id;
+	where id in (101000,101391,103716);
+run;
+
+*no more ids with missing values for gender1;
+
+
+/***** impute race vars from future waves for those missing race1*****/
+data missing_race;
+	set case2;
+	if missing(race1);
+run;
+
+proc freq data=missing_race;
+	tables id*race1/ missing;
+run;
+*no cases missing race var;
+
+data missing_race1;
+	set  control2;
+	if missing(race1);
+run;
+
+proc freq data=missing_race1;
+	tables id*race1/ missing;
+run;
+*control ids missing race1:
+	100507
+	102426 
+	103193
+	103248 
+	103263;
+
+proc print data=class.pnc03;
+	var id race2;
+	WHERE ID=100507 or ID=102426  OR ID=103193 OR ID=103248 OR ID=103263;
+RUN;
+
+data control3;
+	set control2;
+	if ID=100507 then race1=6;
+	if id=102426 then race1=3;
+	if id=103193 then race1=2;
+	if id=103248 then race1=6;
+	if id=103263 then race1=5;
+run;
+
+proc freq data=HW8;
+	tables aggression;
+run;
+
+data check;
+	set HW8;
+	if gender1>0 and race1>0 and aggression>0;
+run;
+
+proc freq data=check;
+	tables aggression gender1 race1;
+run;
+
+proc freq data=case2;
+	tables aggression gender1 race1;
+run;
+
+proc freq data=control3;
+	tables aggression gender1 race1;
+run;
+
+
+options nosource;
+
+*use match_cc macro to match cases/controls 1:4 ; 
+%include "C:\Users\jessa\Desktop\EPID 5314\Homework8\match_cc macro.sas";
+
+%match_cc (casedata = case2,
+           controldata= control3,
+           matchvar=gender1 race1 aggression,
+	       matchval= 0 0 0,
+	       outmatch = psamatch,
+	       outnomatch = psanomatch,
+	       controlspercase=4,
+	      id = id);
+quit;
+
+
+
+*check datasets;
+proc contents data=here.psamatch varnum;
+run;
+
+proc contents data=here.psanomatch varnum;
+run;
+
+
+/********Drop cases/controls that arent exactly matched 1:4****************/
+
+proc print data=here.psanomatch;
+	var id setnumber;
+run;
+*setnumber that need to be deleted (not 1:4):
+	22
+	23
+	43
+	53;
+
+/**************************************************** Part 2 **************************************************/
+
+
+*****************************************************************************
+*	merge HW8 and psamatch datasets, then only keep obs not missing "setnumber" var									   *
+*	this allows us to use the variables included in the HW8 set while only retaining matched participants in our sample*
+****************************************************************************;
+
+
+proc sort data=HW8;
+	by id;
+run;
+
+proc sort data=here.psamatch;
+	by id;
+run;
+
+data combined;
+	merge here.psamatch HW8;
+		by id;
+run;
+
+data HW8_1;
+	set combined;
+	if setnumber in (23,24,43,54) then delete;
+run;
+
+data HW8_1;
+	set HW8_1;
+	if sproc5 = 3 then case = 1;
+	else if sproc5 = 1 then case = 0;
+	else;
+run;
+
+data HW8_1;
+	set HW8_1;
+	if missing(setnumber) then delete;
+run;
+
+proc freq data=HW8_1;
+	table case;
+run;
+
+
+
+/************************** Part 3 ****************************************/
+
+
+*****************************************************************************
+*	create variables when necessary, dichotmize/categorize where necessary						  *
+****************************************************************************;
+
+
+
+*create variable for case;
+data HW8_2;
+	set HW8_1;
+	if sproc5 = 3 then case = 1;
+	else if sproc5 = 1 then case = 0;
+	else;
+run;
+
+*check freq;
+proc freq data=HW8_2;
+	table case control;
+run;
+
+
+*dichotomize alcyear1;
+data HW8_3;
+	set HW8_2;
+	if alcyear1 = 1 then alcyear = 0;
+	else if alcyear1 in (2,3,4,5,6,7) then alcyear = 1;
+	else if missing(alcyear1) then alcyear = .;
+	else;
+run;
+
+*dichotomize alcmon1;
+data HW8_4;
+	set HW8_3;
+	if alcmon1 = 1 then alcmon = 0;
+	else if alcmon1 in (2,3,4,5,6,7) then alcmon = 1;
+	else if missing(alcmon1) then alcmon = .;
+	else;
+run;
+
+*dichotomize maryear1;
+data HW8_5;
+	set HW8_4;
+	if maryear1 = 1 then maryear = 0;
+	else if maryear1 in (2,3,4,5,6,7) then maryear = 1;
+	else if missing(maryear1) then maryear = .;
+	else;
+run;
+
+*dichotmize marmon1;
+data HW8_6;
+	set HW8_5;
+	if marmon1 = 1 then marmon = 0;
+	else if marmon1 in (2,3,4,5,6,7) then marmon = 1;
+	else if missing(marmon1) then marmon = .;
+	else;
+run;
+
+*dichotomize hvyuse1;
+data HW8_7;
+	set HW8_6;
+	if hvyuse1 = 1 then hvyuse = 0;
+	else if hvyuse1 in (2,3,4,5,6,7) then hvyuse = 1;
+	else if missing(hvyuse1) then hvyuse = .;
+	else;
+run;
+
+
+*check that variables are in the set;
+proc contents data=HW8_7 varnum;
+run;
+
+
+*categorize frinum1;
+data HW8_8;
+	set HW8_7;
+	if frinum1 = 1 then frinum = 0; *none;
+	else if frinum1 in (2,3,4,5) then frinum = 1; *more than a few;
+	else if missing(frinum1) then frinum = .;
+	else;
+run;
+
+*check freq;
+proc freq data=HW8_8;
+	tables frinum frinum*frinum1;
+run;
+
+*dichotomize famrul1;
+data HW8_9;
+	set HW8_8;
+	if famrula1 = 1 then rules = 0; *no rules;
+	else if famrula1 = 0 then rules = 1; *has rules;
+	else if missing(famrula1) then rules = .;
+	else;
+run;
+
+*check freq;
+proc freq data=HW8_9;
+	table rules famrula1 famrula1*rules;
+run;
+
+
+*dichotomize sad;
+data HW8_10;
+	set HW8_9;
+	if sad1 = 1 then sad = 0; *not sad;
+	else if sad1 in (2,3) then sad = 1; *sad at least once;
+	else if missing(sad1) then sad = .;
+	else;
+run;
+
+*check freq;
+proc freq data = HW8_10;
+	table sad sad*sad1;
+run;
+
+*recategorize detent1 (2 dummy variables);
+data HW8_11;
+	set HW8_10;
+
+	if detent1 in (1,3) then detent1_3 = 0;
+	else if detent1 = 2 then detent1_3 = 1;
+	else if missing(detent1) then detent1_3 = .;
+
+	if detent1 in (1,2) then detent4 = 0;
+	else if detent1 = 3 then detent4 = 1;
+	else if missing(detent1) then detent4 = .;
+
+run;
+
+*dichotomize lunch variable;
+data HW8_12;
+	set HW8_11;
+	if lunch1 = 1 then lunch = 1;
+	else if lunch1 =2 then lunch = 0;
+	else if lunch1 = 3 then lunch = .;
+	else if missing(lunch1) then lunch = .;
+	else;
+run;
+
+*dichotomize adudrnk1;
+data HW8_12;
+	set HW8_12;
+	if adudrnk1 in (1,2) then adudrink = 0;
+	else if adudrnk1 in (3,4,5) then adudrink = 1;
+	else if missing(adudnk1) then adudrink = .;
+	else;
+run;
+
+
+***********************************************************************
+AGE VARIABLE : "age was calculated using the month and year
+of the reported date of birth."
+***********************************************************************;
+
+*create age variable;
+		*NEED HELP WITH THIS --> NOT SURE WHICH VARIABLES TO USE;
+
+
+
+/******************************** Part 4  **********************************/
+
+*************************************************************
+*				Create FREQ Tables for Table 1				*
+*************************************************************;
+
+
+
+/***Substance use***/
+proc freq data=HW8_12;
+	title "alcohol use in last year";
+	table case*alcyear/ chisq;
+run;
+
+proc freq data=HW8_12;
+	title "alcohol use in last month";
+	table case*alcmon/ chisq;
+run;
+
+proc freq data=HW8_12;
+	title "heavy alcohol use";
+	table case*hvyuse/ chisq;
+run;
+
+proc freq data=HW8_12;
+	title "marijuana use in last year";
+	table case*maryear/ chisq;
+run;
+
+proc freq data=HW8_12;
+	title "marijuana use in last month";
+	table case*marmon/ chisq;
+run;
+
+
+/***Family/Peer characteristics***/
+proc freq data=HW8_12;
+	title "reduced/free lunch";
+	table case*lunch/ chisq;
+run;
+
+proc freq data=HW8_12;
+	title "friends who drink";
+	table case*frinum/ chisq;
+run;
+
+proc means data=HW8_12;
+	title "time without supervision cases";
+	var noadult1;
+	where case = 1;
+run;
+
+proc means data=HW8_12;
+	title "time without supervision controls";
+	var noadult1;
+	where case = 0;
+run;
+
+
+*assumption of normality is questionable - use KW test rather than ttest;
+proc npar1way data=HW8_12 wilcoxon;
+	class case; 
+	var noadult1;
+	*exact wilcoxon; 
+run;
+
+
+proc freq data=HW8_12;
+	title "family alcohol rules";
+	table case*rules/ chisq;
+run;
+
+proc freq data=HW8_12;
+	title "neighborhood adults who drink";
+	table case*adudrink/ chisq;
+run;
+
+
+
+
+/***Social Characteristics***/
+proc means data=HW8_12;
+	title "mean church cases";
+	var church1;
+	where case = 1;
+run;
+
+proc means data=HW8_12;
+	title "mean church controls";
+	var church1;
+	where case = 0;
+run;
+
+proc ttest data=HW8_12;
+	title "p-value church";
+	class case;
+	var church1;
+run;
+
+*assumption of normality is questionable - use KW test rather than ttest;
+proc npar1way data=HW8_12 wilcoxon;
+	class case; 
+	var church1;
+	*exact wilcoxon; 
+run;
+
+proc freq data=HW8_12;
+	title "sad";
+	table case*sad/ chisq;
+run;
+
+
+proc freq data=HW8_12;
+	title "detent1_3";
+	table case*detent1_3/ chisq;
+run;
+
+
+proc freq data=HW8_12;
+	title "detent4";
+	table case*detent4/ chisq;
+run;
+
+proc freq data=HW8_12;
+	table case*detent1/ chisq;
+run;
+
+
+
+proc means data=HW8_12;
+	title "mean age cases";
+	var age1;
+	where case = 1;
+run;
+
+proc means data=HW8_12;
+	title "mean age controls";
+	var age1;
+	where case = 0;
+run;
+
+proc ttest data=HW8_12;
+	title "p-value age";
+	class case;
+	var age1;
+run;
+
+
+
+
+
+/************************** Part 5  **************************************/
+
+*************************************************************
+*				Calculate OR for Table 2					*
+*************************************************************;
+
+proc genmod data=HW8_12 desc;
+	title "OR alcyear";
+	class alcyear (param=ref ref='0');
+	model case = alcyear/ dist=binomial link=logit;
+	repeated subject = setnumber;
+	estimate "OR alcyear" alcyear 1/exp;
+run;
+
+proc genmod data=HW8_12 desc;
+	title "OR alcmon";
+	class alcmon (param=ref ref='0');
+	model case = alcmon/ dist=binomial link=logit;
+	repeated subject = setnumber;
+	estimate "OR alcmon" alcmon 1/exp;
+run;
+
+
+proc genmod data=HW8_12 desc;
+	title "OR hvyuse";
+	class hvyuse (param=ref ref='0');
+	model case = hvyuse/ dist=binomial link=logit;
+	repeated subject = setnumber;
+	estimate "OR hvyuse" hvyuse 1/exp;
+run;
+
+
+proc genmod data=HW8_12 desc;
+	title "OR maryear";
+	class maryear (param=ref ref='0');
+	model case = maryear/ dist=binomial link=logit;
+	repeated subject = setnumber;
+	estimate "OR maryear" maryear 1/exp;
+run;
+
+
+proc genmod data=HW8_12 desc;
+	title "OR marmon";
+	class marmon (param=ref ref='0');
+	model case = marmon/ dist=binomial link=logit;
+	repeated subject = setnumber;
+	estimate "OR marmon" marmon 1/exp;
+run;
+
+
+proc genmod data=HW8_12 desc;
+	title "OR lunch";
+	class lunch (param=ref ref='0');
+	model case = lunch/ dist=binomial link=logit;
+	repeated subject = setnumber;
+	estimate "OR lunch" lunch 1/exp;
+run;
+
+proc genmod data=HW8_12 desc;
+	title "OR frinum";
+	class frinum (param=ref ref='0');
+	model case = frinum/ dist=binomial link=logit;
+	repeated subject = setnumber;
+	estimate "OR frinum" frinum 1/exp;
+run;
+
+proc genmod data=HW8_12 desc;
+	title "OR rules";
+	class rules (param=ref ref='0');
+	model case = rules/ dist=binomial link=logit;
+	repeated subject = setnumber;
+	estimate "OR rules" rules 1/exp;
+run;
+
+
+proc genmod data=HW8_12 desc;
+	title "OR adudrink";
+	class adudrink  (param=ref ref='0') setnumber (param=ref ref=first);
+	model case = adudrink/ dist=binomial link=logit;
+	repeated subject = setnumber;
+	estimate "OR adudrink" adudrink 1/exp;
+run;
+
+
+proc genmod data=HW8_12 desc;
+	title "OR sad";
+	class sad (param=ref ref='0') setnumber (param=ref ref=first) ;
+	model case = sad/ dist=binomial link=logit;
+	repeated subject = setnumber;
+	estimate "OR sad" sad 1/exp;
+run;
+
+proc genmod data=HW8_12 desc;
+	class detent1 setnumber/param=ref ref=FIRST;  
+	model case=detent1/link=logit dist=binomial;  
+	repeated subject=setnumber;
+	estimate "logOR Punishment or Detention (1-3)" detent1 1 0/exp;
+	estimate "logOR Punishment or Detention (4)" detent1 0 1/exp;
+run;
+
+proc genmod data=HW8_12 desc;
+	class setnumber/param=ref ref=FIRST;  
+	model case=age1/link=logit dist=binomial;  
+	repeated subject=setnumber;
+	estimate "logOR" age1 1/exp;
+run;
+
+
+proc genmod data=HW8_12 desc;
+	class setnumber/param=ref ref=FIRST;  
+	model case=church1/link=logit dist=binomial;  
+	repeated subject=setnumber;
+	estimate "logOR" church1 1/exp;
+run;
+
+proc genmod data=HW8_12 desc;
+	class setnumber/param=ref ref=FIRST;  
+	model case=noadult1/link=logit dist=binomial;  
+	repeated subject=setnumber;
+	estimate "logOR" noadult1 1/exp;
+run;
+
+
+
