@@ -1,0 +1,102 @@
+/***************************************************************************
+ *	Course: Data Analysis - EPID 5314						   *
+ *	Assignment: Homework 3								   *
+ *	Due Date: 9/15/2021								   *
+ *	Programmer(s): Jessie Ausman							   *
+ *	Program Name: HW3									   *
+ *	Save Program/Log/Output: C:\Users\jessa\Desktop\EPID 5314\Homework3  *
+ *	Save Data Files: C:\Users\jessa\Desktop\EPID 5314\PNC Data File\PNC  *
+ *	Datasets										   *
+ ***************************************************************************/
+
+
+
+
+/***************************		PART 0	****************************/
+
+
+
+
+
+*******************************************************************
+				Read in Datasets
+*******************************************************************;
+
+libname bios "C:\Users\jessa\Desktop\EPID 5314\PNC Data File\PNC Datasets";
+
+
+
+
+*******************************************************************
+				Create merged dataset
+*******************************************************************;
+
+data pnc05;
+	set bios.pnc05;
+run;
+
+data pnc09;
+	set bios.pnc09;
+run;
+
+data lab3;
+	merge pnc05 (in=a) pnc09 (in=b);
+	by ID;
+	if a;
+	if b;
+run;
+
+
+/****************************	Part 1	*********************************/
+
+
+
+
+
+*******************************************************************
+			Generate Pearson's regression plots
+*******************************************************************;
+
+proc freq data=lab3;
+	table cigever4*fritob5;
+run;
+
+proc genmod data=lab3;
+	model fritob5 = cigever4/ dist=p;
+	output out=pout reschi=rs;
+run;
+
+proc univariate data=pout noprint;
+	var rs;
+	probplot rs/ normal (mu=est sigma=est);
+run;
+
+
+
+
+
+
+/****************************		Part 2	***************************/
+
+
+
+*******************************************************************
+			Ordinal Logistic Regression & Score Test
+*******************************************************************;
+
+proc freq data=lab3;
+	table cigever4;
+run;
+
+proc genmod data=lab3;
+class cigever4 (param=ref ref='2'); 
+/*sets reference group as those who have never had a cigarette*/
+	model fritob5 = cigever4/ link=cumlogit dist=mult;
+	estimate "OR yes vs no" cigever4 1/exp;
+run;
+quit;
+
+Proc logistic data=lab3;
+	class cigever4 (param=ref ref='2');
+	model fritob5 = cigever4;
+run;
