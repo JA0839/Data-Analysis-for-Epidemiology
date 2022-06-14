@@ -1,0 +1,173 @@
+/************************************************************************************
+ *	Course: Data Analysis - EPID 5314												*
+ *	Assignment: Lab 3																*
+ *	Due Date: 9/9/2021																*
+ *	Programmer(s): Jessie Ausman													*
+ *	Program Name: Lab3																*
+ *	Save Program/Log/Output: C:\Users\jessa\Desktop\EPID 5314\Lab3					*
+ *	Save Data Files: C:\Users\jessa\Desktop\EPID 5314\PNC Data File\PNC Datasets	*
+ ************************************************************************************/
+
+
+
+
+/********************************	PART 1	************************************/
+
+
+
+
+
+*******************************************************************
+						Read in Datasets
+*******************************************************************;
+
+libname bios "C:\Users\jessa\Desktop\EPID 5314\PNC Data File\PNC Datasets";
+
+
+
+
+*******************************************************************
+						Create merged dataset
+*******************************************************************;
+
+data pnc05;
+	set bios.pnc05;
+run;
+
+data pnc09;
+	set bios.pnc09;
+run;
+
+data lab3;
+	merge pnc05 (in=a) pnc09 (in=b);
+	by ID;
+	if a;
+	if b;
+run;
+
+
+
+
+***********************************************************************
+Create alcohol norms categorical variable (alc_norm) for 8th grade data
+***********************************************************************;
+
+data lab3_1;
+	set lab3;
+	alc_norm = frinum4 + alcsen4 + adudrnk4;
+	if missing(frinum4) or missing(alcsen4) or missing(adudrnk4) then alc_norm = .;
+run;
+
+
+
+data lab3_2;
+	set lab3_1;
+	if alc_norm LE 5 then risk_cat = "low";
+	if alc_norm GE 6 and alc_norm LE 13 then risk_cat = "medium";
+	if alc_norm GE 14 then risk_cat = "high";
+	if missing(alc_norm) then risk_cat = " ";
+	else;
+run;
+
+
+
+***********************************************************************
+	Create binary variable for "with partners" and "w/out partners"
+***********************************************************************;
+
+
+data lab3_3;
+	set lab3_2;
+	if partnum5 = 0 then part_bin = 0;
+	else if partnum5 > 0 then part_bin = 1;
+	else if missing(partnum) then part_bin = .;
+	else;
+run;
+
+
+proc freq data=lab3_3;
+	table partnum5*part_bin;
+run;
+
+
+***********************************************************************
+	create categorical variable for partnum5 var
+***********************************************************************;
+
+data lab3_4;
+	set lab3_3;
+	if partnum5 = 0 then part_cat = 0;
+	else if partnum5 = 1 then part_cat = 1;
+	else if partnum5 in (2,3) then part_cat = 2;
+	else if partnum5 GE 4 then part_cat = 4;
+	else if missing(partnum5) then part_cat = .;
+	else;
+run;
+
+proc freq data=lab3_4;
+	table partnum5*part_cat;
+run;
+
+
+/********************************	PART 2	************************************/
+
+***********************************************************************
+GLM for Log Reg - Part_bin (95% CI for OR medium vs. low risk_cat)
+***********************************************************************;
+
+*Question 1;
+proc genmod data=lab3_4 desc;
+	class risk_cat (param=ref ref="low");
+	model part_bin = risk_cat/ link=logit dist=binomial;
+	estimate "OR med vs low" risk_cat 0 1/exp; 
+/*obtain OR for medium vs low risk category for alc_norm variable WITH 95% CI*/
+run;
+quit;
+
+
+*Question 2;
+proc genmod data=lab3_4 desc;
+	class risk_cat (param=ref ref="low");
+	model part_bin = risk_cat/ link=logit dist=binomial type3;
+/*tests whether risk_cat (overall) is associated with having 1 or more sexual partners*/
+run;
+quit;
+
+
+
+***********************************************************************
+Proc Logistic - Part_bin (95% CI for OR medium vs. low risk_cat)
+***********************************************************************;
+
+*Question 3;
+proc logistic data=lab3_4 desc;
+	class risk_cat (param=ref ref="low");
+	model part_bin = risk_cat;
+run;
+
+
+
+*Question 4;
+proc genmod data=lab3_4 desc;
+	class risk_cat (param=ref ref="low");
+	model part_bin = risk_cat/ link=logit dist=binomial;
+	estimate "OR high vs low" risk_cat 1 0/exp; 
+run;
+quit;
+
+
+
+/********************************	PART 3	************************************/
+
+
+***********************************************************************
+					Ordinal Logistic Regression
+***********************************************************************;
+
+*Question 5;
+proc genmod data=lab3_4;
+	class risk_cat (param=ref ref="low");
+	model part_cat = risk_cat/ link=cumlogit dist=mult;
+	estimate "OR high vs low" risk_cat 1 0/exp;
+run;
+quit;
