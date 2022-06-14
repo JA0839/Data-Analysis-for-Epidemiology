@@ -1,0 +1,97 @@
+/************************************************************************************
+ *	Course: Data Analysis - EPID 5314												*
+ *	Assignment: HW 12																*
+ *	Due Date: 12/1/2021																*
+ *	Programmer(s): Jessie Ausman													*
+ *	Program Name: HW12																*
+ *	Save Program/Log/Output: C:\Users\jessa\Desktop\EPID 5314\Homework12			*
+ *	Save Data Files: C:\Users\jessa\Desktop\EPID 5314\PNC Data File\PNC Datasets	*
+ ************************************************************************************/
+
+
+
+
+/********************************	PART 0	************************************/
+
+*read in data;
+libname bios "C:\Users\jessa\Desktop\EPID 5314\PNC Data File\PNC Datasets";
+
+data pnc05;
+	set bios.pnc05;
+run;
+
+data pnc09;
+	set bios.pnc09;
+run;
+
+data HW12;
+	merge pnc05 pnc09;
+	by ID;
+run;
+
+
+*dichotomize hvyuse5 - use no as ref;
+data HW12_1;
+	set HW12;
+	if hvyuse5 = 1 then hvyuse = 0; *0 = no;
+	else if hvyuse5 in (2,3,4,5,6) then hvyuse = 1; *1 = yes;
+	else if missing(hvyuse5) then hvyuse = .;
+run;
+
+
+
+*dichotomize getpar4 - use easy as ref;
+
+data HW12_2;
+	set HW12_1;
+	if getpar4 = 1 then getpar = 0; *0 = easy;
+	else if getpar4 in (2,3) then getpar = 1; *1 = in-between/hard;
+	else if missing(getpar4) then getpar = .;
+run;
+
+
+/********************************	Part 1	************************************/
+
+*analyze missing data patterns;
+proc mi data=HW12_2 nimpute=0;
+	var hvyuse getpar gender4;
+run;
+
+/********************************	Part 2	************************************/
+
+*use PROC MI to create multiple imputations to produce a less biased beta est;
+
+proc mi data=HW12_2 nimpute=20 out=out1 seed=1;
+	class hvyuse getpar gender4;
+	fcs logistic(hvyuse getpar gender4);
+	var hvyuse getpar gender4;
+run;
+
+/*Multiplicative Scale*/
+proc genmod data=out1 desc;
+	by _imputation_;
+	class hvyuse (param=ref ref='0') getpar (param=ref ref='0') gender4 (param=ref ref='1');
+	model hvyuse = getpar gender4 getpar*gender4 / covb link=logit dist=binomial;
+ods output ParameterEstimates=parms
+		ParmInfo=info
+		CovB=vars;
+run;
+
+proc mianalyze parms=parms covb=vars parminfo=info;
+	modeleffects getpar gender4 getpar*gender4;
+run;
+
+
+/*Additive Scale*/
+proc genmod data=out1 desc;
+	by _imputation_;
+	class hvyuse (param=ref ref='0') getpar (param=ref ref='0') gender4 (param=ref ref='1');
+	model hvyuse = getpar gender4 getpar*gender4 / covb link=identity dist=binomial;
+ods output ParameterEstimates=parms
+		ParmInfo=info
+		CovB=vars;
+run;
+
+proc mianalyze parms=parms covb=vars parminfo=info;
+	modeleffects getpar gender4 getpar*gender4;
+run;
