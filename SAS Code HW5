@@ -1,0 +1,128 @@
+/*************************************************************************
+ *	Course: Data Analysis - EPID 5314						 *
+ *	Assignment: Homework 5								 *
+ *	Due Date: 9/30/2021								 *
+ *	Programmer(s): Jessie Ausman							 *
+ *	Program Name: HW5									 *
+ *	Save Program/Log/Output: C:\Users\jessa\Desktop\EPID 5314\Homework5*
+ *	Save Data Files: C:\Users\jessa\Desktop\EPID 5314\PNC Data File\PNC*
+ *	Datasets										 *
+**************************************************************************/
+
+
+
+
+/***************	PART 0	************************************/
+
+*read in data and create temp dataset;
+libname bios "C:\Users\jessa\Desktop\EPID 5314\PNC Data File\PNC Datasets";
+
+data pnc05;
+	set bios.pnc05;
+run;
+
+*make hvyuse4 dichotomous Y/N - use N as ref;
+data HW5;
+	set pnc05;
+	if hvyuse4 = 1 then hvyuse = 0; *0 = 'no';
+	else if hvyuse4 in (2,3,4,5,6) then hvyuse = 1; *1 = 'yes';
+	else if missing(hvyuse4) then hvyuse = .;
+	else;
+run;
+
+*check coding;
+proc freq data=HW5;
+	tables hvyuse4 hvyuse4*hvyuse;
+run;
+
+
+*recode getpar4 (0,1,2) - use 'easy' as ref;
+data HW5_1;
+	set HW5;
+	if getpar4 = 1 then getpar = 0; *0 = easy;
+	else if getpar4 = 2 then getpar = 1; *1 = in-between;
+	else if getpar4 = 3 then getpar = 2; *2 = hard;
+	else if missing(getpar4) then getpar = .;
+	else;
+run;
+
+proc freq data=HW5_1;
+	tables getpar4 getpar4*getpar;
+run;
+
+
+*recode gender (0 1) - make 'male' ref;
+data HW5_2;
+	set HW5_1;
+	if gender4 = 1 then female = 0; *if female = 0, then male;
+	else if gender4 = 2 then female = 1; *if female = 1, then female;
+	else if missing(gender4) then female = .;
+	else;
+run;
+
+proc freq data=HW5_2;
+	tables gender4 gender4*female;
+run;
+
+
+
+
+/******************	PART 1	************************************/
+
+*Assess EM of 'female' on association between 'getpar' (exposure) and 'hvyuse' (outcome)
+on an MULTIPLICATIVE scale;
+
+proc genmod data=HW5_2 desc;
+	class female (param=ref ref='0') getpar (param=ref ref='0');
+	model hvyuse = getpar female getpar*female / dist=binomial link=logit type3; 
+run;
+
+*p-value is nonsignificant on multiplicative scale;
+
+proc sort data=HW5_2;
+	by female;
+run;
+
+proc genmod data=HW5_2 desc;
+	by female;
+	class getpar (param=ref ref='0');
+	model hvyuse = getpar/ dist=binomial link=logit type3;
+run;
+
+*BUT exposure estimates vary across strata of gender - thus we must test for additive interaction;
+
+
+
+
+
+*Assess EM of 'female' on association between 'getpar' (exposure) and 'hvyuse' (outcome)
+on an ADDITIVE scale;
+
+proc genmod data=HW5_2 desc;
+	class female (param=ref ref='0') getpar (param=ref ref='0');
+	model hvyuse = getpar female getpar*female / dist=binomial link=identity type3; /*identity link for linear probability model*/
+run;
+
+
+
+*check interaction using normal dist - model specific results;
+proc genmod data=HW5_2 desc;
+	class female (param=ref ref='0') getpar (param=ref ref='0');
+	model hvyuse = getpar female getpar*female / dist=normal link=identity type3; /*identity link for linear probability model*/
+run;
+
+
+
+
+
+/*****************	PART 2	************************************/
+
+*estimate RD across strata of gender (IF EM IS ADDITIVE);
+proc genmod data=HW5_2 desc;
+	class female (param=ref ref='0') getpar (param=ref ref='0');
+	model hvyuse = getpar female getpar*female / dist=binomial link=identity type3; /*identity link for linear probability model*/
+	estimate "RD for male in-between" getpar 1 0 getpar*female 0 0;
+	estimate "RD for male hard" getpar 0 1 getpar*female 0 0; 
+	estimate "RD for female in-between" getpar 1 0 getpar*female 1 0;
+	estimate "RD for female hard" getpar 0 1 getpar*female 0 1;
+run;
