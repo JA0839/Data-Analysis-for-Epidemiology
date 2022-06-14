@@ -1,0 +1,126 @@
+/************************************************************************************
+ *	Course: Data Analysis - EPID 5314												*
+ *	Assignment: Lab 9																*
+ *	Due Date: 10/28/2021																*
+ *	Programmer(s): Jessie Ausman													*
+ *	Program Name: Lab9																*
+ *	Save Program/Log/Output: C:\Users\jessa\Desktop\EPID 5314\Lab10					*
+ *	Save Data Files: C:\Users\jessa\Desktop\EPID 5314\PNC Data File\PNC Datasets						*
+ ************************************************************************************/
+
+
+
+
+/********************************	PART 1	************************************/
+
+libname bios "C:\Users\jessa\Desktop\EPID 5314\PNC Data File\PNC Datasets";
+
+
+
+
+data wave1;
+	set bios.pnc02;
+
+	/*create alcohol behavior cont scale var*/
+	alc = alcyear1 + alcmon1 + alcweek1 + hvyuse1+ drunk1;
+
+
+	/*categorize race into white, black, hisp, other*/
+	if race1 = 5 then race = 1;	*1 = white;
+	if race1 = 2 then race = 2;	*2 = black;
+	if race1 = 3 then race = 3;	*3 = hispanic;
+	if race1 in (1,4,6) then race = 4; *4 = other;
+
+	/*create wave variable*/
+	time = 0;
+
+run;
+
+
+data wave2;
+	set bios.pnc03;
+
+	/*create alcohol behavior cont scale var*/
+	alc = alcyear2 + alcmon2 + alcweek2 + hvyuse2 + drunk2;
+
+	/*categorize race into white, black, hisp, other*/
+	if race2 = 5 then race = 1;	*1 = white;
+	if race2 = 2 then race = 2;	*2 = black;
+	if race2 = 3 then race = 3;	*3 = hispanic;
+	if race2 in (1,4,6) then race = 4; *4 = other;
+
+	/*create wave variable*/
+	time = 1;
+
+run;
+
+
+data wave3;
+	set bios.pnc04;
+
+	/*create alcohol behavior cont scale var*/
+	alc = alcyear3 + alcmon3 + alcweek3 + hvyuse3 + drunk3;
+
+	/*categorize race into white, black, hisp, other*/
+	if race3 = 5 then race = 1;	*1 = white;
+	if race3 = 2 then race = 2;	*2 = black;
+	if race3 = 3 then race = 3;	*3 = hispanic;
+	if race3 in (1,4,6) then race = 4; *4 = other;
+
+	/*create wave variable*/
+	time = 2;
+
+run;
+
+data wave4;
+	set bios.pnc05;
+
+	/*create alcohol behavior cont scale var*/
+	alc = alcyear4 + alcmon4 + alcweek4 + hvyuse4 + drunk4;
+
+	/*categorize race into white, black, hisp, other*/
+	if race4 = 5 then race = 1;	*1 = white;
+	if race4 = 2 then race = 2;	*2 = black;
+	if race4 = 3 then race = 3;	*3 = hispanic;
+	if race4 in (1,4,6) then race = 4; *4 = other;
+
+	/*create wave variable*/
+	time = 3;
+
+run;
+
+data Lab10;
+	set wave1 wave2 wave3 wave4;
+	by ID;
+	keep id race alc time;
+run;
+
+
+/********************************	PART 2	************************************/
+
+*Spaghetti plot - mean individual response;
+Proc sgpanel data=Lab10;
+	panelby race / spacing = 1;
+	series y = alc x = time / group = ID;
+run;
+
+*Mean group response;
+Proc sgplot data=Lab10;
+	vline time / response=alc group=race stat=mean limitstat=stderr;
+run;
+	
+
+
+/********************************	PART 3	************************************/
+
+proc genmod data= Lab10;
+	class race (param=ref ref=first);
+	model alc = race time race*time / type3;
+	estimate "slope for white" race 0 0 0 time 1;
+	estimate "slope for black" race 1 0 0 time 1;
+	estimate "slope for hispanic" race 0 1 0 time 1;
+	estimate "slope for other" race 0 0 1 time 1;
+	estimate "difference in slopes black vs. white" race*time 1 0 0;
+	estimate "difference in slopes hispanic vs. white" race*time 0 1 0;
+	estimate "difference in slopes other vs. white" race*time 0 0 1;
+run;
