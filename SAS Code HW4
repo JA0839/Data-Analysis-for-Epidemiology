@@ -1,0 +1,226 @@
+/*************************************************************************
+ *	Course: Data Analysis - EPID 5314						 *
+ *	Assignment: HW4									 *
+ *	Due Date: 9/22/2021								 *
+ *	Programmer(s): Jessie Ausman							 *
+ *	Program Name: HW4									 *
+ *	Save Program/Log/Output: C:\Users\jessa\Desktop\EPID 5314\Homework4*
+ *	Save Data Files: C:\Users\jessa\Desktop\EPID 5314\PNC Data File\PNC*
+ *	Datasets										 *
+*************************************************************************/
+
+
+
+
+/*************************	PART 0	******************************/
+
+*read in data;
+
+libname bios "C:\Users\jessa\Desktop\EPID 5314\PNC Data File\PNC Datasets";
+
+data pnc09;
+	set bios.pnc09;
+run;
+
+data pnc05;
+	set bios.pnc05;
+run;
+
+data HW4;
+	merge pnc05 (in=a) pnc09 (in=b);
+	by ID;
+	if a;
+	if b;
+run;
+
+data hw4_1;
+	set hw4;
+	if sproc5 = 1;
+run;
+
+*dichotomize drunk4 into yes/no;
+data hw4_2;
+	set hw4_1;
+	if drunk4 eq 1 then drunk = 0;
+	else if drunk4 in (2,3,4,5,6) then drunk = 1;
+	else if missing(drunk4) then drunk = .;
+	else;
+run;
+
+proc freq data=hw4_2;
+	table drunk*drunk4;
+run;
+
+*set "dont know" responses for lunch4 to missing values;
+data hw4_3;
+	set hw4_2;
+	if lunch4 eq 3 then lunch4 = .;
+	else;
+run;
+
+proc freq data=hw4_2;
+	table lunch4;
+run;
+
+proc freq data=hw4_3;
+	table lunch4;
+run;
+
+
+/***********************	PART 1	**************************/
+
+*specify the maximal model to assess the TOTAL (direct+indirect) effect of getting drunk in the 8th
+grade on alcohol and drug use in the 12th grade;
+	*the maximal model should account for the following confounders:
+		-race5
+		-lunch4
+		-parprob4
+		-alcacc_sc5
+	*exposure variable:
+		-drunk4 --> binary
+	*outcome variable
+		-atmbeh5 --> continuous
+
+	*we leave out the fridr5 variable because if we were to adjust for this variable we would be estimating the direct 
+	effect of drunk4 on atmbeh5 but not the TOTAL effect;
+
+proc genmod data=hw4_3;
+	class race5 (param=ref ref='1') parprob4 (param=ref ref='1') lunch4 (param=ref ref='1') drunk (param=ref ref='0');
+	model atmbeh5 = drunk race5 parprob4 lunch4 alcacc_sc5/ type3;
+run;
+
+
+
+
+
+/*********************	PART 2	****************************/
+
+*use change in estimate method to reduce the maximal model;
+
+
+
+**************ROUND 1**********************;
+
+*remove race5;
+proc genmod data=hw4_3;
+	title "remove race5";
+	class parprob4 (param=ref ref='1') lunch4 (param=ref ref='1') drunk (param=ref ref='0');
+	model atmbeh5 = drunk parprob4 lunch4 alcacc_sc5/ type3;
+run;
+
+*remove parprob4;
+proc genmod data=hw4_3;
+	title "remove parprob4";
+	class race5 (param=ref ref='1') lunch4 (param=ref ref='1') drunk (param=ref ref='0');
+	model atmbeh5 = drunk race5 lunch4  alcacc_sc5/ type3;
+run;
+
+*remove lunch4;
+proc genmod data=hw4_3;
+	title "remove lunch4";
+	class race5 (param=ref ref='1') parprob4 (param=ref ref='1') drunk (param=ref ref='0');
+	model atmbeh5 = drunk race5 parprob4 alcacc_sc5/ type3;
+run;
+
+*remove alcacc_sc5;
+proc genmod data=hw4_3;
+	title "remove alcacc_sc5";
+	class race5 (param=ref ref='1') parprob4 (param=ref ref='1') lunch4 (param=ref ref='1') drunk (param=ref ref='0');
+	model atmbeh5 = drunk race5 parprob4 lunch4/ type3;
+run;
+
+
+
+**************ROUND 2**********************;
+
+*remove race5;
+proc genmod data=hw4_3;
+	title "remove race5";
+	class lunch4 (param=ref ref='1') drunk (param=ref ref='0');
+	model atmbeh5 = drunk lunch4 alcacc_sc5/ type3;
+run;
+
+
+*remove lunch4;
+proc genmod data=hw4_3;
+	title "remove lunch4";
+	class race5 (param=ref ref='1') drunk (param=ref ref='0');
+	model atmbeh5 = drunk race5 alcacc_sc5/ type3;
+run;
+
+*remove alcacc_sc5;
+proc genmod data=hw4_3;
+	title "remove alcacc_sc5";
+	class race5 (param=ref ref='1') lunch4 (param=ref ref='1') drunk (param=ref ref='0');
+	model atmbeh5 = drunk race5 lunch4/ type3;
+run;
+
+
+
+
+**************ROUND 3**********************;
+
+*remove race5;
+proc genmod data=hw4_3;
+	title "remove race5";
+	class drunk (param=ref ref='0');
+	model atmbeh5 = drunk alcacc_sc5/ type3;
+run;
+
+
+*remove alcacc_sc5;
+proc genmod data=hw4_3;
+	title "remove alcacc_sc5";
+	class race5 (param=ref ref='1') drunk (param=ref ref='0');
+	model atmbeh5 = drunk race5 / type3;
+run;
+
+
+
+
+***********************ROUND 4****************;
+
+*remove alcacc_sc5;
+proc genmod data=hw4_3;
+	title "remove alcacc_sc5";
+	class drunk (param=ref ref='0');
+	model atmbeh5 = drunk / type3;
+run;
+
+
+
+
+
+
+
+/******************	PART 3	************************************/
+
+*use backwards elimination (p-value) method to reduce the maximal model;
+
+*maximal model;
+proc genmod data=hw4_3;
+	class race5 (param=ref ref='1') parprob4 (param=ref ref='1') lunch4 (param=ref ref='1') drunk (param=ref ref='0');
+	model atmbeh5 = drunk race5 parprob4 lunch4 alcacc_sc5/ type3;
+run;
+
+
+**************ROUND 1**********************;
+
+*eliminate parprob4 since it is least significant in the maximal model;
+proc genmod data=hw4_3;
+	title "remove parprob4";
+	class race5 (param=ref ref='1') lunch4 (param=ref ref='1') drunk (param=ref ref='0');
+	model atmbeh5 = drunk race5 lunch4 alcacc_sc5/ type3;
+run;
+
+
+
+
+**************ROUND 2**********************;
+
+*remove lunch4 since it has least significant p-value in round 1;
+proc genmod data=hw4_3;
+	title "remove lunch4";
+	class  race5 (param=ref ref='1') drunk (param=ref ref='0');
+	model atmbeh5 = drunk race5 alcacc_sc5/ type3;
+run;
