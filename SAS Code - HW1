@@ -1,0 +1,197 @@
+/*************************************************************************
+ *	Course: Data Analysis - EPID 5314						 *
+ *	Assignment: Homework 1								 *
+ *	Due Date: 9/1/2021								 *
+ *	Programmer(s): Jessie Ausman							 *
+ *	Program Name: HW1									 *
+ *	Save Program/Log/Output: C:\Users\jessa\Desktop\EPID 5314\Homework1*
+ *	Save Data Files: C:\Users\jessa\Desktop\EPID 5314\PNC Data File\PNC Datasets										 *
+**************************************************************************/
+
+
+*******************************************************************
+						Read in Datasets
+*******************************************************************;
+
+Libname PNC "C:\Users\jessa\Desktop\EPID 5314\PNC Data File\PNC Datasets";
+
+
+*******************************************************************
+					Create Temporary Datasets
+*******************************************************************;
+
+Data wave1;
+	set pnc.pnc02;
+run;
+
+
+*******************************************************************
+		Create Categorical Var for Alcohol Use in Last Year
+*******************************************************************;
+
+Proc freq data=wave1;
+	table alcyear1;
+run;
+
+
+data wave1_2;
+	set wave1;
+	if alcyear1 in (2,3,4,5,6,7) then alc_bin1 = 1;
+	if alcyear1 eq 1 then alc_bin1 = 0;
+	if missing(alcyear1) then alc_bin1 = .;
+	else;
+run;
+
+
+proc freq data=wave1_2;
+	table alc_bin1;
+run;
+
+
+data wave1_3;
+	set wave1_2;
+run;
+
+
+proc freq data=wave1_3;
+	table alc_bin1;
+run;
+
+*******************************************************************
+			Create Var for "other race" (a1, d1, o1)
+*******************************************************************;
+
+proc freq data=wave1_3;
+	table race1;
+run;
+
+
+data wave1_4;
+	set wave1_3;
+	if race1 = 2 then race_black = 1;
+	if race1 in (1,3,4,5,6) then race_black = 0;
+	if missing(race1) then race_black = .;
+	else;
+run;
+
+
+proc freq data=wave1_4;
+	table race_black;
+run;
+
+
+data wave1_5;
+	set wave1_4;
+	if race1 = 5 then race_white = 1;
+	if race1 in (1,2,3,4,6) then race_white = 0;
+	if missing(race1) then race_white = .;
+	else;
+run;
+
+
+proc freq data=wave1_5;
+	table race_white;
+run;
+
+
+data wave1_6;
+	set wave1_5;
+	if race1 = 3 then race_his = 1;
+	if race1 in (1,2,4,5,6) then race_his = 0;
+	if missing(race1) then race_his = .;
+	else;
+run;
+
+
+proc freq data=wave1_6;
+	table race_his;
+run;
+
+
+data wave1_7;
+	set wave1_6;
+	if race_black = 0 or race_white = 0 or race_his = 0 then race_other = 1;
+	if missing(race_black) then race_other = .;
+	if race_black = 1 or race_white = 1 or race_his = 1 then race_other = 0;
+	else;
+run;
+
+
+proc freq data=wave1_7;
+	table race_other;
+run;
+
+
+data wave1_8;
+	set wave1_7;
+	if race_black = 1 then race_tot = 1;
+	if race_white = 1 then race_tot = 2;
+	if race_his = 1 then race_tot = 3;
+	if race_other = 1 then race_tot = 4;
+	if missing(race1) then race_tot = .;
+	else;
+run;
+
+
+proc freq data=wave1_8;
+	table race_tot;
+run;
+
+
+*******************************************************************
+	Create New Var for "family structure" 1 vs. (2,3,4,5,6,7,8)
+*******************************************************************;
+
+proc freq data=wave1_8;
+	table family1;
+run;
+
+
+data wave1_9;
+	set wave1_8;
+	if family1 = 1 then fam_together = 1;
+	if missing(family1) then fam_together = .;
+	if family1 in (2,3,4,5,6,7,8,9) then fam_together = 0;
+	else;
+run;
+
+
+proc freq data=wave1_9;
+	table fam_together;
+run;
+
+
+
+
+
+*******************************************************************
+					Create PROC FREQ Tables
+*******************************************************************;
+
+*Table for Alcohol use and Gender;
+
+Proc freq data=wave1_9;
+	tables alc_bin1 * gender1/ missing chisq;
+run;
+
+
+*Table for Alcohol use and Race;
+
+Proc freq data=wave1_9;
+	tables alc_bin1 * race_tot/ missing chisq;
+run;
+
+
+
+*Table for Alcohol Use and Family Structure;
+
+Proc freq data=wave1_9;
+	tables alc_bin1 * fam_together/ missing chisq;
+run;
+
+
+*Table for Alcohol Use and Free Lunch;
+
+Proc freq data=wave1_9;
+	tables alc_bin1 * lunch1 / missing chisq;
+run;
