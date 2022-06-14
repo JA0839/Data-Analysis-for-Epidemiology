@@ -1,0 +1,149 @@
+/*************************************************************************
+ *	Course: Data Analysis - EPID 5314						 *
+ *	Assignment: HW 2									 *
+ *	Due Date: 9/9/2021								 *
+ *	Programmer(s): Jessie Ausman							 *
+ *	Program Name: HW2									 *
+ *	Save Program/Log/Output: C:\Users\jessa\Desktop\EPID 5314\Homework2*
+ *	Save Data Files: C:\Users\jessa\Desktop\EPID 5314\PNC Data File\PNC 
+ *	Datasets										 *
+**************************************************************************/
+
+
+*******************************************************************
+						Read in Datasets
+*******************************************************************;
+
+libname bios "C:\Users\jessa\Desktop\EPID 5314\PNC Data File\PNC Datasets";
+
+
+
+
+*******************************************************************
+						Create merged dataset
+*******************************************************************;
+
+data pnc05;
+	set bios.pnc05;
+run;
+
+data pnc09;
+	set bios.pnc09;
+run;
+
+data lab2;
+	merge pnc05 (in=a) pnc09 (in=b);
+	by ID;
+	if a;
+	if b;
+run;
+
+
+
+
+*******************************************************************
+	Restrict set to those who drank alcohol in last year at pnc05
+*******************************************************************;
+
+proc freq data=lab2;
+	table alcyear4;
+run;
+
+data lab2_1;
+	set lab2;
+	if alcyear4 NE 1;
+run;
+
+
+data lab2_2;
+	set lab2_1;
+	if alcyear4 = . then delete;
+run;
+
+
+
+*******************************************************************
+	Create alcohol norms variable (alc_norm) for 8th grade data
+*******************************************************************;
+
+data lab2_3;
+	set lab2_2;
+	alc_norm = frinum4 + alcsen4 + adudrnk4;
+	if missing(frinum4) or missing(alcsen4) or missing(adudrnk4) then alc_norm = .;
+run;
+
+
+
+
+
+
+
+
+
+
+
+*******************************************************************
+					Recode alc_norm -> make it categorical
+*******************************************************************;
+
+data lab2_4;
+	set lab2_3;
+	if alc_norm LE 5 then risk_cat = "low";
+	if alc_norm GE 6 and alc_norm LE 13 then risk_cat = "medium";
+	if alc_norm GE 14 then risk_cat = "high";
+	if missing(alc_norm) then risk_cat = " ";
+	else;
+run;
+
+*check conditional processing;
+proc freq data=lab2_4;
+	tables risk_cat*alc_norm;
+run;
+
+
+
+*******************************************************************
+					Create dummy vars for risk_cat
+*******************************************************************;
+
+data lab2_5;
+	set lab2_4;
+
+	if risk_cat = "med" then med = 1;
+	else if risk_cat = "hig" then med = 0;
+	else if risk_cat = "low" then med = 0;
+	else if missing(risk_cat) then med = .;
+
+run;
+
+
+data lab2_6;
+	set lab2_5;
+
+	if risk_cat = "med" then high = 0;
+	else if risk_cat = "hig" then high = 1;
+	else if risk_cat = "low" then high = 0;
+	else if missing(risk_cat) then high = .;	/*low is the reference group!*/
+
+run;
+
+
+
+data lab2_7;
+	set lab2_6;
+	if risk_cat = "low" then risk = 1;
+	else if risk_cat = "med" then risk = 2;
+	else if risk_cat = "hig" then risk = 3;
+	else if risk_cat = " " then risk = .;
+	else;
+run;
+
+******************************************************************************
+Run a NONPARAMETRIC test to assess the relationship between risk_cat & alcbeh5
+******************************************************************************;
+
+*Kruskal-Wallis test;
+Proc npar1way data=lab2_7 wilcoxon dscf;
+	class risk;
+	var alcbeh5;
+run;
