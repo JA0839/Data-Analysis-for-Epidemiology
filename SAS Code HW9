@@ -1,0 +1,93 @@
+/************************************************************************************
+ *	Course: Data Analysis - EPID 5314												*
+ *	Assignment: Homework 9															*
+ *	Due Date: 11/3/2021																*
+ *	Programmer(s): Jessie Ausman													*
+ *	Program Name: HW9																*
+ *	Save Program/Log/Output: C:\Users\jessa\Desktop\EPID 5314\Homework9				*
+ *	Save Data Files: C:\Users\jessa\Desktop\EPID 5314\Homework9\Data				*
+ ************************************************************************************/
+
+
+
+
+/********************************	PART 0	************************************/
+
+*read in data;
+libname bios "C:\Users\jessa\Desktop\EPID 5314\Homework9\Data";
+
+*create temporary dataset;
+data HW9;
+	set bios.hw9;
+run;
+
+*check for missing values;
+proc freq data=hw9;
+	tables trt npolyps;
+run;
+/*no missing values --> no need for weighting*/
+
+
+*do however need to use offset to calculate rate ratio --> need to create logtime var;
+data HW9_1;
+	set HW9;
+	logtime = log(time);
+run;
+
+
+
+/********************************	PART 1	************************************/
+
+*Calculate rate ratio and 95% CI for effect of trt on npolyps;
+proc genmod data=HW9_1;
+	model npolyps = trt / link=log dist=p offset=logtime;
+	estimate "RR" trt 1/exp;
+run;
+
+
+
+
+/********************************	PART 2	************************************/
+
+*test for multiplicative interaction between gender and treatment;
+
+*first need to create time variables to test for interaction without using the offset statement;
+data HW9_2;
+	set HW9_1;
+	gender_t = sex*time;
+	trt_t = trt*time;
+run;
+
+*test interaction across strata;
+proc sort data=HW9_2;
+	by sex;
+run;
+
+proc genmod data=HW9_2;
+	by sex;
+	model npolyps = time trt_t/ link=log dist=p;
+run;
+
+*then fit multiplicative interaction model and use estimate statements to determine if interaction exists;
+proc genmod data=HW9_2;
+	title "multiplicative interaction";
+	model npolyps = time gender_t trt_t trt_t*gender_t/link=log dist=p type3 noint lrci dscale;
+	estimate "RR, trt=1 vs. trt=0 for gender=0" trt_t 1/exp;
+	estimate "RR, trt=1 vs. trt=0 for gender=1" trt_t 1 trt_t*gender_t 1/exp;
+run;
+
+
+
+
+
+
+
+/********************************	PART 3	************************************/
+
+*then fit additive interaction model and use estimate statements to determine if interaction exists;
+proc genmod data=HW9_2;
+	title "additive interaction";
+	model npolyps = time gender_t trt_t trt_t*gender_t/link=identity dist=p type3 noint lrci dscale;
+	estimate "RD, trt=1 vs. trt=0 for gender=0" trt_t 1;
+	estimate "RD, trt=1 vs. trt=0 for gender=1" trt_t 1 trt_t*gender_t 1;
+run;
